@@ -1,8 +1,11 @@
-import {Auth} from "./components/Auth";
-import {db} from "./config/firebase"
-import {getDocs, collection, addDoc, deleteDoc, doc} from "firebase/firestore"
+import Auth from "./components/Auth";
+import {db, auth, storage} from "./config/firebase"
+import {getDocs, collection, addDoc, deleteDoc, doc, updateDoc} from "firebase/firestore"
+import {ref, uploadBytes} from "firebase/storage"
 import styled from "styled-components";
 import {useEffect, useState} from "react";
+import MovieCard from "./components/MovieCard";
+import FileUploader from "./components/FileUploader";
 
 const StyledApp = styled.main`
   display: flex;
@@ -43,18 +46,54 @@ function App() {
     }
 
     async function onSubmitMovie() {
+        if (! auth.currentUser){
+            console.log('Need to log in to perform this action')
+            return
+        }
+
         try{
             console.log('submitting movie')
             await addDoc(movieCollectionRef,
                 {
                     releaseDate: newMovieDate,
                     title: newMovieTitle,
-                    receivedAnOscar: false}
+                    receivedAnOscar: false,
+                    createdBy: auth?.currentUser?.uid
+                }
             )
             getMovieList()
             console.log('submitted movie')
         }catch (err){
             console.error(err)
+        }
+    }
+
+    async function updateMovieTitle(title, movieId){
+        try{
+            console.log('updating title', title)
+            await updateDoc(doc(db, 'movie', movieId), {title: title})
+            console.log('updated title')
+            getMovieList()
+        }catch (err){
+            console.error(err)
+        }
+
+    }
+
+    async function uploadFile(file){
+        if(! file){
+            console.log('Hmm no file')
+            return
+        }
+
+        const filesFolderRef = ref(storage, `projectFolder/${file.name}`)
+
+        try{
+            console.log("File uploading")
+            await uploadBytes(filesFolderRef, file)
+            console.log("File uploaded")
+        }catch (e) {
+            console.error(e)
         }
     }
 
@@ -76,18 +115,15 @@ function App() {
             </div>
 
             {movieList.map(movie => (
-                <div>
-                    <h3>{movie.title}</h3>
-                    <h3>Released at {movie.releaseDate}</h3>
-                    <button onClick={()=> deleteMovie(movie.id)}>Delete Movie</button>
-                    <form>
-                        <input type="text"
-                               placeholder={'New title...'}
-                        />
-                        <button>Update</button>
-                    </form>
-                </div>
+                <MovieCard deleteMovie={deleteMovie}
+                           movie={movie}
+                           updateMovieTitle={updateMovieTitle}
+                           key={movie.id}
+                />
             ))}
+
+            <FileUploader uploadFile={uploadFile}
+            />
         </StyledApp>
     );
 }
